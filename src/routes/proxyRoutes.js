@@ -1,9 +1,8 @@
-// routes/proxy.routes.js
-const express = require("express");
+import express from 'express';
+import { proxyVideo } from '../controllers/proxy.controller.js';
+
 const router = express.Router();
-const proxyController = require("../controllers/proxy.controller");
 
-// Exemplo: GET /api/proxy?url=http://exemplo.com/video.mp4
-router.get("/", proxyController.proxyVideo);
+router.get('/', proxyVideo);
 
-module.exports = router;
+export default router;
