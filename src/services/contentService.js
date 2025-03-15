@@ -2,15 +2,27 @@ import { supabase } from '../config/supabase.js';
 
 export const listContent = async () => {
   try {
-    const { data: conteudos, error } = await supabase
-      .from('streamhivex_conteudos')
-      .select('*');
+    const pageSize = 10000;
+    let start = 0;
+    let allData = [];
+    let finished = false;
 
-    if (error) return { status: 400, error: error.message };
+    while (!finished) {
+      const { data: chunk, error } = await supabase
+        .from('streamhivex_conteudos')
+        .select('*')
+        .range(start, start + pageSize - 1);
+
+      if (error) return { status: 400, error: error.message };
+
+      allData = allData.concat(chunk);
+      if (chunk.length < pageSize) finished = true;
+      start += pageSize;
+    }
 
     const agrupado = {};
 
-    for (const item of conteudos) {
+    for (const item of allData) {
       const categoria = item.categoria || 'Desconhecida';
       const subcategoria = item.subcategoria || 'Outro';
 
@@ -18,10 +30,8 @@ export const listContent = async () => {
       if (!agrupado[categoria][subcategoria]) agrupado[categoria][subcategoria] = [];
 
       if (subcategoria.toLowerCase() === 'serie') {
-        // Nome ajustado (remove SxxExx e espaços finais)
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
 
-        // Verifica se essa série já está no array
         const existente = agrupado[categoria][subcategoria].find(s => s.nome === nomeBase);
 
         const episodio = {
@@ -32,19 +42,16 @@ export const listContent = async () => {
         };
 
         if (existente) {
-          // Adiciona episódio à série existente
           existente.episodios.push(episodio);
         } else {
-          // Nova série
           agrupado[categoria][subcategoria].push({
             nome: nomeBase,
-            poster: item.poster, // usa o primeiro episódio
+            poster: item.poster,
             url: item.url,
             episodios: [episodio]
           });
         }
       } else {
-        // Filme
         agrupado[categoria][subcategoria].push({
           id: item.id,
           nome: item.nome,
@@ -59,7 +66,6 @@ export const listContent = async () => {
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
-
 
 export const addContent = async (data) => {
     try {
