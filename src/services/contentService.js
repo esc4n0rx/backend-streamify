@@ -4,7 +4,7 @@ export const listContent = async () => {
   try {
     console.log('🔍 Iniciando carregamento de conteúdos...');
 
-    // 1. Total de registros
+    // 1. Obter total de registros
     const { count: totalRegistros, error: countError } = await supabase
       .from('streamhivex_conteudos')
       .select('*', { count: 'exact', head: true });
@@ -16,18 +16,19 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    // 2. Puxar dados com limit + offset
+    // 2. Puxar dados com range real
     const pageSize = 10000;
-    let offset = 0;
+    let start = 0;
     let allData = [];
     let tentativa = 1;
 
-    while (offset < totalRegistros) {
+    while (start < totalRegistros) {
+      const end = start + pageSize - 1;
+
       const { data: chunk, error } = await supabase
         .from('streamhivex_conteudos')
         .select('*')
-        .limit(pageSize)
-        .offset(offset);
+        .range(start, end);
 
       if (error) {
         console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
@@ -39,12 +40,11 @@ export const listContent = async () => {
 
       if (chunk.length < pageSize) break;
 
-      offset += pageSize;
+      start += pageSize;
       tentativa++;
     }
 
     console.log(`✅ Total retornado após leitura: ${allData.length}`);
-
     if (allData.length !== totalRegistros) {
       console.warn(`⚠ Atenção: total retornado (${allData.length}) difere do total no banco (${totalRegistros})`);
     }
