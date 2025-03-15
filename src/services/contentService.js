@@ -1,10 +1,21 @@
 import { supabase } from '../config/supabase.js';
 
+let contentCache = null;
+let contentCacheTimestamp = null;
+const CACHE_DURATION_MS = 1000 * 60 * 10;
+
 export const listContent = async () => {
   try {
-    console.log('🔍 Iniciando carregamento de conteúdos via RPC em blocos de 1000...');
+    const now = Date.now();
 
-    // 1. Obter total real
+    // Verifica se o cache ainda está válido
+    if (contentCache && contentCacheTimestamp && now - contentCacheTimestamp < CACHE_DURATION_MS) {
+      console.log('⚡ Retornando dados do cache (conteúdos)');
+      return { status: 200, data: contentCache };
+    }
+
+    console.log('🔍 Cache expirado. Carregando conteúdos do banco...');
+
     const { count: totalRegistros, error: countError } = await supabase
       .from('streamhivex_conteudos')
       .select('*', { count: 'exact', head: true });
@@ -16,16 +27,17 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    const pageSize = 1000;
+    const batchSize = 10000;
     let start = 0;
     let allData = [];
     let tentativa = 1;
 
     while (start < totalRegistros) {
-      const end = Math.min(start + pageSize - 1, totalRegistros - 1);
+      const end = Math.min(start + batchSize - 1, totalRegistros - 1);
 
       const { data: chunk, error } = await supabase
-        .rpc('select_all_contents')
+        .from('streamhivex_conteudos')
+        .select('*')
         .range(start, end);
 
       if (error) {
@@ -35,19 +47,18 @@ export const listContent = async () => {
 
       console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
       allData = allData.concat(chunk);
-
-      if (chunk.length < pageSize) break;
-
-      start += pageSize;
+      if (chunk.length < batchSize) break;
+      start += batchSize;
       tentativa++;
     }
 
-    console.log(`✅ Total retornado via RPC: ${allData.length}`);
+    console.log(`✅ Total retornado: ${allData.length}`);
+
     if (allData.length !== totalRegistros) {
       console.warn(`⚠ Diferença no total: esperado ${totalRegistros}, recebido ${allData.length}`);
     }
 
-    // 3. Agrupamento
+    // Agrupamento
     const agrupado = {};
 
     for (const item of allData) {
@@ -88,14 +99,19 @@ export const listContent = async () => {
       }
     }
 
-    console.log('✅ Conteúdos organizados e prontos para envio.');
+    // Armazena no cache
+    contentCache = agrupado;
+    contentCacheTimestamp = Date.now();
+
+    console.log('✅ Conteúdos organizados, cache atualizado e prontos para envio.');
     return { status: 200, data: agrupado };
 
   } catch (err) {
-    console.error('❌ Erro interno ao listar conteúdos via RPC:', err.message);
+    console.error('❌ Erro interno ao listar conteúdos:', err.message);
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
+
 
 export const addContent = async (data) => {
     try {
