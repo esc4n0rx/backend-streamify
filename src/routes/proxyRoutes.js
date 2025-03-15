@@ -1,5 +1,5 @@
 import express from 'express';
-import { proxyVideo } from '../controllers/proxy.controller.js';
+import { proxyVideo } from '../controllers/proxyController.js';
 
 const router = express.Router();
 
