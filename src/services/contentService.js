@@ -2,9 +2,9 @@ import { supabase } from '../config/supabase.js';
 
 export const listContent = async () => {
   try {
-    console.log('🔍 Iniciando carregamento de conteúdos...');
+    console.log('🔍 Iniciando carregamento de conteúdos via RPC...');
 
-    // 1. Obter total de registros
+    // 1. Obter total de registros (opcional, apenas para log)
     const { count: totalRegistros, error: countError } = await supabase
       .from('streamhivex_conteudos')
       .select('*', { count: 'exact', head: true });
@@ -16,37 +16,18 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    // 2. Puxar dados com range real
-    const pageSize = 10000;
-    let start = 0;
-    let allData = [];
-    let tentativa = 1;
+    // 2. Chamar função RPC
+    const { data: allData, error: rpcError } = await supabase.rpc('select_all_contents');
 
-    while (start < totalRegistros) {
-      const end = start + pageSize - 1;
-
-      const { data: chunk, error } = await supabase
-        .from('streamhivex_conteudos')
-        .select('*')
-        .range(start, end);
-
-      if (error) {
-        console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
-        return { status: 400, error: error.message };
-      }
-
-      console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
-      allData = allData.concat(chunk);
-
-      if (chunk.length < pageSize) break;
-
-      start += pageSize;
-      tentativa++;
+    if (rpcError) {
+      console.error('❌ Erro ao executar select_all_contents:', rpcError.message);
+      return { status: 500, error: 'Erro ao carregar conteúdos via RPC' };
     }
 
-    console.log(`✅ Total retornado após leitura: ${allData.length}`);
+    console.log(`✅ Total retornado via RPC: ${allData.length}`);
+
     if (allData.length !== totalRegistros) {
-      console.warn(`⚠ Atenção: total retornado (${allData.length}) difere do total no banco (${totalRegistros})`);
+      console.warn(`⚠ Diferença no total: esperado ${totalRegistros}, recebido ${allData.length}`);
     }
 
     // 3. Agrupamento
@@ -94,7 +75,7 @@ export const listContent = async () => {
     return { status: 200, data: agrupado };
 
   } catch (err) {
-    console.error('❌ Erro interno ao listar conteúdos:', err.message);
+    console.error('❌ Erro interno ao listar conteúdos via RPC:', err.message);
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
