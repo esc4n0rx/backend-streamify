@@ -4,7 +4,7 @@ export const listContent = async () => {
   try {
     console.log('🔍 Iniciando carregamento de conteúdos...');
 
-    // 1. Verifica o total real de registros no banco
+    // 1. Total de registros
     const { count: totalRegistros, error: countError } = await supabase
       .from('streamhivex_conteudos')
       .select('*', { count: 'exact', head: true });
@@ -16,18 +16,18 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    // 2. Carregamento em blocos
+    // 2. Puxar dados com limit + offset
     const pageSize = 10000;
-    let start = 0;
+    let offset = 0;
     let allData = [];
-    let finished = false;
     let tentativa = 1;
 
-    while (!finished) {
+    while (offset < totalRegistros) {
       const { data: chunk, error } = await supabase
         .from('streamhivex_conteudos')
         .select('*')
-        .range(start, start + pageSize - 1);
+        .limit(pageSize)
+        .offset(offset);
 
       if (error) {
         console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
@@ -36,15 +36,15 @@ export const listContent = async () => {
 
       console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
       allData = allData.concat(chunk);
-      if (chunk.length < pageSize) finished = true;
 
-      start += pageSize;
+      if (chunk.length < pageSize) break;
+
+      offset += pageSize;
       tentativa++;
     }
 
     console.log(`✅ Total retornado após leitura: ${allData.length}`);
 
-    // Verifica discrepância
     if (allData.length !== totalRegistros) {
       console.warn(`⚠ Atenção: total retornado (${allData.length}) difere do total no banco (${totalRegistros})`);
     }
@@ -92,6 +92,7 @@ export const listContent = async () => {
 
     console.log('✅ Conteúdos organizados e prontos para envio.');
     return { status: 200, data: agrupado };
+
   } catch (err) {
     console.error('❌ Erro interno ao listar conteúdos:', err.message);
     return { status: 500, error: 'Erro ao listar conteúdos' };
