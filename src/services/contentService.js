@@ -2,9 +2,9 @@ import { supabase } from '../config/supabase.js';
 
 export const listContent = async () => {
   try {
-    console.log('🔍 Iniciando carregamento de conteúdos via RPC...');
+    console.log('🔍 Iniciando carregamento de conteúdos via RPC em blocos de 1000...');
 
-    // 1. Obter total de registros (opcional, apenas para log)
+    // 1. Obter total real
     const { count: totalRegistros, error: countError } = await supabase
       .from('streamhivex_conteudos')
       .select('*', { count: 'exact', head: true });
@@ -16,18 +16,33 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    // 2. Chamar função RPC
-    const { data: allData, error: rpcError } = await supabase
-    .rpc('select_all_contents', { p_limit: totalRegistros });
+    const pageSize = 1000;
+    let start = 0;
+    let allData = [];
+    let tentativa = 1;
 
+    while (start < totalRegistros) {
+      const end = Math.min(start + pageSize - 1, totalRegistros - 1);
 
-    if (rpcError) {
-      console.error('❌ Erro ao executar select_all_contents:', rpcError.message);
-      return { status: 500, error: 'Erro ao carregar conteúdos via RPC' };
+      const { data: chunk, error } = await supabase
+        .rpc('select_all_contents')
+        .range(start, end);
+
+      if (error) {
+        console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
+        return { status: 400, error: error.message };
+      }
+
+      console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
+      allData = allData.concat(chunk);
+
+      if (chunk.length < pageSize) break;
+
+      start += pageSize;
+      tentativa++;
     }
 
     console.log(`✅ Total retornado via RPC: ${allData.length}`);
-
     if (allData.length !== totalRegistros) {
       console.warn(`⚠ Diferença no total: esperado ${totalRegistros}, recebido ${allData.length}`);
     }
