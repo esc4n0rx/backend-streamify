@@ -17,7 +17,10 @@ export const listContent = async () => {
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
     // 2. Chamar função RPC
-    const { data: allData, error: rpcError } = await supabase.rpc('select_all_contents');
+    const { data: allData, error: rpcError } = await supabase
+    .rpc('select_all_contents')
+    .range(0, totalRegistros - 1);
+
 
     if (rpcError) {
       console.error('❌ Erro ao executar select_all_contents:', rpcError.message);
