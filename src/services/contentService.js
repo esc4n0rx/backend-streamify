@@ -3,7 +3,7 @@ import fs from 'fs';
 
 let contentCache = null;
 let contentCacheTimestamp = null;
-const CACHE_DURATION_MS = 1000 * 60 * 10; // 10 minutos
+const CACHE_DURATION_MS = 1000 * 60 * 30; // 10 minutos
 
 export const listContent = async () => {
   try {
@@ -103,9 +103,13 @@ export const listContent = async () => {
     contentCache = agrupado;
     contentCacheTimestamp = Date.now();
 
-    // (Opcional) Salvar também em arquivo local .json
     try {
-      fs.writeFileSync('./cache/content.json', JSON.stringify(agrupado, null, 2));
+      const cacheDir = './cache';
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+    
+      fs.writeFileSync(`${cacheDir}/content.json`, JSON.stringify(agrupado, null, 2));
       console.log('💾 Cache salvo também em ./cache/content.json');
     } catch (err) {
       console.warn('⚠ Não foi possível salvar cache local em arquivo:', err.message);
