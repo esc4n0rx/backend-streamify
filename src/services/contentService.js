@@ -18,8 +18,7 @@ export const listContent = async () => {
 
     // 2. Chamar função RPC
     const { data: allData, error: rpcError } = await supabase
-    .rpc('select_all_contents')
-    .range(0, totalRegistros - 1);
+    .rpc('select_all_contents', { p_limit: totalRegistros });
 
 
     if (rpcError) {
