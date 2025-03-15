@@ -2,10 +2,26 @@ import { supabase } from '../config/supabase.js';
 
 export const listContent = async () => {
   try {
+    console.log('🔍 Iniciando carregamento de conteúdos...');
+
+    // 1. Verifica o total real de registros no banco
+    const { count: totalRegistros, error: countError } = await supabase
+      .from('streamhivex_conteudos')
+      .select('*', { count: 'exact', head: true });
+
+    if (countError) {
+      console.error('❌ Erro ao contar registros:', countError.message);
+      return { status: 500, error: 'Erro ao contar registros no banco.' };
+    }
+
+    console.log(`📊 Total de registros no banco: ${totalRegistros}`);
+
+    // 2. Carregamento em blocos
     const pageSize = 10000;
     let start = 0;
     let allData = [];
     let finished = false;
+    let tentativa = 1;
 
     while (!finished) {
       const { data: chunk, error } = await supabase
@@ -13,13 +29,27 @@ export const listContent = async () => {
         .select('*')
         .range(start, start + pageSize - 1);
 
-      if (error) return { status: 400, error: error.message };
+      if (error) {
+        console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
+        return { status: 400, error: error.message };
+      }
 
+      console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
       allData = allData.concat(chunk);
       if (chunk.length < pageSize) finished = true;
+
       start += pageSize;
+      tentativa++;
     }
 
+    console.log(`✅ Total retornado após leitura: ${allData.length}`);
+
+    // Verifica discrepância
+    if (allData.length !== totalRegistros) {
+      console.warn(`⚠ Atenção: total retornado (${allData.length}) difere do total no banco (${totalRegistros})`);
+    }
+
+    // 3. Agrupamento
     const agrupado = {};
 
     for (const item of allData) {
@@ -31,7 +61,6 @@ export const listContent = async () => {
 
       if (subcategoria.toLowerCase() === 'serie') {
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
-
         const existente = agrupado[categoria][subcategoria].find(s => s.nome === nomeBase);
 
         const episodio = {
@@ -61,8 +90,10 @@ export const listContent = async () => {
       }
     }
 
+    console.log('✅ Conteúdos organizados e prontos para envio.');
     return { status: 200, data: agrupado };
   } catch (err) {
+    console.error('❌ Erro interno ao listar conteúdos:', err.message);
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
