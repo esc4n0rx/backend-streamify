@@ -1,14 +1,14 @@
 import { supabase } from '../config/supabase.js';
+import fs from 'fs';
 
 let contentCache = null;
 let contentCacheTimestamp = null;
-const CACHE_DURATION_MS = 1000 * 60 * 10;
+const CACHE_DURATION_MS = 1000 * 60 * 10; // 10 minutos
 
 export const listContent = async () => {
   try {
     const now = Date.now();
 
-    // Verifica se o cache ainda está válido
     if (contentCache && contentCacheTimestamp && now - contentCacheTimestamp < CACHE_DURATION_MS) {
       console.log('⚡ Retornando dados do cache (conteúdos)');
       return { status: 200, data: contentCache };
@@ -27,7 +27,7 @@ export const listContent = async () => {
 
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    const batchSize = 10000;
+    const batchSize = 1000;
     let start = 0;
     let allData = [];
     let tentativa = 1;
@@ -45,15 +45,15 @@ export const listContent = async () => {
         return { status: 400, error: error.message };
       }
 
-      console.log(`📦 Bloco ${tentativa} carregado - ${chunk.length} registros`);
+      console.log(`📦 Bloco ${tentativa} carregado: ${chunk.length} registros (range ${start}-${end})`);
+
       allData = allData.concat(chunk);
-      if (chunk.length < batchSize) break;
+      if (chunk.length < batchSize) break; // fim antecipado
       start += batchSize;
       tentativa++;
     }
 
-    console.log(`✅ Total retornado: ${allData.length}`);
-
+    console.log(`✅ Total retornado após batches: ${allData.length}`);
     if (allData.length !== totalRegistros) {
       console.warn(`⚠ Diferença no total: esperado ${totalRegistros}, recebido ${allData.length}`);
     }
@@ -99,9 +99,17 @@ export const listContent = async () => {
       }
     }
 
-    // Armazena no cache
+    // Salva em cache em memória
     contentCache = agrupado;
     contentCacheTimestamp = Date.now();
+
+    // (Opcional) Salvar também em arquivo local .json
+    try {
+      fs.writeFileSync('./cache/content.json', JSON.stringify(agrupado, null, 2));
+      console.log('💾 Cache salvo também em ./cache/content.json');
+    } catch (err) {
+      console.warn('⚠ Não foi possível salvar cache local em arquivo:', err.message);
+    }
 
     console.log('✅ Conteúdos organizados, cache atualizado e prontos para envio.');
     return { status: 200, data: agrupado };
