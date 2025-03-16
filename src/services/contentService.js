@@ -71,14 +71,14 @@ export const listContent = async () => {
       if (subcategoria.toLowerCase() === 'serie') {
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
         const existente = agrupado[categoria][subcategoria].find(s => s.nome === nomeBase);
-
+      
         const episodio = {
           id: item.id,
           episodio: item.episodios,
           temporada: item.temporadas,
           url: item.url
         };
-
+      
         if (existente) {
           existente.episodios.push(episodio);
         } else {
@@ -86,6 +86,7 @@ export const listContent = async () => {
             nome: nomeBase,
             poster: item.poster,
             url: item.url,
+            sinopse: item.sinopse || 'Descrição não fornecida',
             episodios: [episodio]
           });
         }
@@ -94,10 +95,12 @@ export const listContent = async () => {
           id: item.id,
           nome: item.nome,
           poster: item.poster,
-          url: item.url
+          url: item.url,
+          sinopse: item.sinopse || 'Descrição não fornecida'
         });
       }
     }
+      
 
     // Salva em cache em memória
     contentCache = agrupado;
