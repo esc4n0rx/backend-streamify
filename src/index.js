@@ -10,7 +10,6 @@ import sinopseRoutes from './routes/sinopse.js';
 import perfilRoutes from './routes/perfilRoutes.js';
 import watchRoutes from './routes/watchRoutes.js';
 import cors from 'cors';
-
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,14 +17,16 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-
-app.options('*', cors({
-  origin: '*',
+// ✅ AQUI: CORS Middleware global corretamente configurado
+app.use(cors({
+  origin: ['https://streamifyx.vercel.app', 'http://localhost:3000'], // adicione domínios permitidos
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
+
+// ✅ Rotas (após cors)
 app.use('/api/auth', authRoutes);
 app.use('/assets', express.static('assets'));
 app.use('/api/favorites', favoriteRoutes);

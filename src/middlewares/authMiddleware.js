@@ -1,19 +1,21 @@
-// auth middleware.js
 import jwt from 'jsonwebtoken';
 
 export const authenticateToken = (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Garantia extra
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // ✅ Permitir pré-flight OPTIONS direto
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204); // No Content
+  }
 
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(' ')[1];
 
-  if (!token) return res.status(401).json({ error: 'Token não fornecido' });
+  if (!token) {
+    return res.status(401).json({ error: 'Token não fornecido' });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    req.usuario = decoded; // Padronize para o restante do backend
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Token inválido ou expirado' });
