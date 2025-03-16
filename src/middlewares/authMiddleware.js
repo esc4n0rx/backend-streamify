@@ -1,7 +1,11 @@
 import jwt from 'jsonwebtoken';
 
 export const authenticateToken = (req, res, next) => {
-  // ✅ Permitir pré-flight OPTIONS direto
+  // Garante headers CORS mesmo nas respostas reais
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204); // No Content
   }
@@ -15,7 +19,7 @@ export const authenticateToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.usuario = decoded; // Padronize para o restante do backend
+    req.usuario = decoded; // Padronize esse nome em todo backend
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Token inválido ou expirado' });
