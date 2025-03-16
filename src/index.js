@@ -6,6 +6,7 @@ import contentAdminRoutes from './routes/contentAdminRoutes.js';
 import searchRoutes from './routes/searchRoutes.js';
 import proxyRoutes from './routes/proxyRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
+import sinopseRoutes from './routes/sinopse.js';
 import watchRoutes from './routes/watchRoutes.js';
 import cors from 'cors';
 
@@ -34,6 +35,7 @@ app.use('/api/proxy', proxyRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/watch', watchRoutes);
+app.use('/api', sinopseRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
