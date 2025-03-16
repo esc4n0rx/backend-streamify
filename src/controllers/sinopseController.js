@@ -73,18 +73,19 @@ export const buscarSinopse = async (req, res) => {
 
     // Atualizar no banco se existia conteúdo
     if (existentes.length > 0) {
-      const ids = existentes.map(c => c.id);
-      const updates = ids.map(id => ({ id, sinopse: novaSinopse }));
-
-      console.log(`💾 [Sinopse] Atualizando sinopse para ${ids.length} registros no Supabase...`);
-      const { error: erroUpdate } = await supabase
-        .from('streamhivex_conteudos')
-        .upsert(updates, { onConflict: 'id' });
-
-      if (erroUpdate) {
-        console.error('❌ [Sinopse] Erro ao atualizar sinopses no banco:', erroUpdate.message);
-      } else {
-        console.log('✅ [Sinopse] Sinopses atualizadas com sucesso no banco.');
+      console.log(`💾 [Sinopse] Atualizando sinopse para ${existentes.length} registros no Supabase...`);
+    
+      for (const item of existentes) {
+        const { error: erroUpdate } = await supabase
+          .from('streamhivex_conteudos')
+          .update({ sinopse: novaSinopse })
+          .eq('id', item.id);
+    
+        if (erroUpdate) {
+          console.error(`❌ [Sinopse] Erro ao atualizar sinopse para ID ${item.id}:`, erroUpdate.message);
+        } else {
+          console.log(`✅ [Sinopse] Atualização feita para ID ${item.id}`);
+        }
       }
     }
 
