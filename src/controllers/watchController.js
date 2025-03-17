@@ -1,7 +1,7 @@
 import { supabase } from '../config/supabase.js';
 
 export const registerWatch = async (req, res) => {
-  const usuario_id = req.user.id;
+  const usuario_id = req.usuario.id;
   const { conteudo_id } = req.body;
 
   if (!conteudo_id) {
