@@ -23,6 +23,9 @@ export const listContent = async (categoria = '', subcategoria = '') => {
     if (categoria) query = query.ilike('categoria', `%${categoria}%`);
     if (subcategoria) query = query.ilike('subcategoria', `%${subcategoria}%`);
 
+    // Adicionando log para depuração
+    console.log("🔎 Executando consulta para contar registros com filtros: categoria =", categoria, ", subcategoria =", subcategoria);
+
     // Obter o total de registros
     const { count: totalRegistros, error: countError } = await query;
     if (countError || totalRegistros === null) {
