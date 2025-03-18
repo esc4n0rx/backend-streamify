@@ -1,9 +1,11 @@
 import * as contentService from '../services/contentService.js';
 
 export const listContent = async (req, res) => {
-  const response = await contentService.listContent();
+  const { categoria, subcategoria } = req.query; 
+  const response = await contentService.listContent(categoria, subcategoria);
   res.status(response.status).json(response);
 };
+
 
 export const addContent = async (req, res) => {
     const response = await contentService.addContent(req.body);

@@ -9,6 +9,7 @@ import recommendationRoutes from './routes/recommendationRoutes.js';
 import sinopseRoutes from './routes/sinopse.js';
 import perfilRoutes from './routes/perfilRoutes.js';
 import watchRoutes from './routes/watchRoutes.js';
+import listRoutes from './routes/listRoutes.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -38,6 +39,7 @@ app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/watch', watchRoutes);
 app.use('/api', sinopseRoutes);
 app.use('/api/perfis', perfilRoutes);
+app.use('/api/lists', listRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);

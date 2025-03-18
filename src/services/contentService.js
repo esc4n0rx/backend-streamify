@@ -3,9 +3,9 @@ import fs from 'fs';
 
 let contentCache = null;
 let contentCacheTimestamp = null;
-const CACHE_DURATION_MS = 1000 * 60 * 30; // 10 minutos
+const CACHE_DURATION_MS = 1000 * 60 * 30; // 30 minutos
 
-export const listContent = async () => {
+export const listContent = async (categoria = '', subcategoria = '') => {
   try {
     const now = Date.now();
 
@@ -16,10 +16,15 @@ export const listContent = async () => {
 
     console.log('🔍 Cache expirado. Carregando conteúdos do banco...');
 
-    const { count: totalRegistros, error: countError } = await supabase
-      .from('streamhivex_conteudos')
-      .select('*', { count: 'exact', head: true });
+    // Inicializa a query para buscar conteúdos
+    let query = supabase.from('streamhivex_conteudos').select('*');
 
+    // Adiciona os filtros de categoria e subcategoria
+    if (categoria) query = query.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) query = query.ilike('subcategoria', `%${subcategoria}%`);
+
+    // Obter o total de registros
+    const { count: totalRegistros, error: countError } = await query;
     if (countError) {
       console.error('❌ Erro ao contar registros:', countError.message);
       return { status: 500, error: 'Erro ao contar registros no banco.' };
@@ -35,10 +40,7 @@ export const listContent = async () => {
     while (start < totalRegistros) {
       const end = Math.min(start + batchSize - 1, totalRegistros - 1);
 
-      const { data: chunk, error } = await supabase
-        .from('streamhivex_conteudos')
-        .select('*')
-        .range(start, end);
+      const { data: chunk, error } = await query.range(start, end);
 
       if (error) {
         console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
@@ -46,7 +48,6 @@ export const listContent = async () => {
       }
 
       console.log(`📦 Bloco ${tentativa} carregado: ${chunk.length} registros (range ${start}-${end})`);
-
       allData = allData.concat(chunk);
       if (chunk.length < batchSize) break; // fim antecipado
       start += batchSize;
@@ -71,14 +72,14 @@ export const listContent = async () => {
       if (subcategoria.toLowerCase() === 'serie') {
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
         const existente = agrupado[categoria][subcategoria].find(s => s.nome === nomeBase);
-      
+
         const episodio = {
           id: item.id,
           episodio: item.episodios,
           temporada: item.temporadas,
           url: item.url
         };
-      
+
         if (existente) {
           existente.episodios.push(episodio);
         } else {
@@ -100,7 +101,6 @@ export const listContent = async () => {
         });
       }
     }
-      
 
     // Salva em cache em memória
     contentCache = agrupado;
@@ -111,7 +111,7 @@ export const listContent = async () => {
       if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir, { recursive: true });
       }
-    
+
       fs.writeFileSync(`${cacheDir}/content.json`, JSON.stringify(agrupado, null, 2));
       console.log('💾 Cache salvo também em ./cache/content.json');
     } catch (err) {
