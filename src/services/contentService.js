@@ -25,8 +25,8 @@ export const listContent = async (categoria = '', subcategoria = '') => {
 
     // Obter o total de registros
     const { count: totalRegistros, error: countError } = await query;
-    if (countError) {
-      console.error('❌ Erro ao contar registros:', countError.message);
+    if (countError || totalRegistros === null) {
+      console.error('❌ Erro ao contar registros ou total é nulo:', countError ? countError.message : 'Total de registros é nulo');
       return { status: 500, error: 'Erro ao contar registros no banco.' };
     }
 
@@ -72,14 +72,14 @@ export const listContent = async (categoria = '', subcategoria = '') => {
       if (subcategoria.toLowerCase() === 'serie') {
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
         const existente = agrupado[categoria][subcategoria].find(s => s.nome === nomeBase);
-
+      
         const episodio = {
           id: item.id,
           episodio: item.episodios,
           temporada: item.temporadas,
           url: item.url
         };
-
+      
         if (existente) {
           existente.episodios.push(episodio);
         } else {

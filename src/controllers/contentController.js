@@ -5,8 +5,6 @@ export const listContent = async (req, res) => {
   const response = await contentService.listContent(categoria, subcategoria);
   res.status(response.status).json(response);
 };
-
-
 export const addContent = async (req, res) => {
     const response = await contentService.addContent(req.body);
     res.status(response.status).json(response);
