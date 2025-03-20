@@ -14,13 +14,14 @@ export const listContent = async (categoria = '', subcategoria = '') => {
     }
     console.log('🔍 Cache expirado. Carregando conteúdos do banco...');
 
-    // Realiza a query para obter apenas a contagem dos registros com os filtros aplicados
-    const { count: totalRegistros, error: countError } = await supabase
+    // Monta a query para contagem com filtros condicionais
+    let countQuery = supabase
       .from('streamhivex_conteudos')
-      .select('*', { count: 'exact', head: true })
-      .ilike('categoria', `%${categoria}%`)
-      .ilike('subcategoria', `%${subcategoria}%`);
+      .select('*', { count: 'exact', head: true });
+    if (categoria) countQuery = countQuery.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) countQuery = countQuery.ilike('subcategoria', `%${subcategoria}%`);
 
+    const { count: totalRegistros, error: countError } = await countQuery;
     if (countError || totalRegistros === null) {
       console.error(
         '❌ Erro ao contar registros ou total é nulo:',
@@ -30,12 +31,12 @@ export const listContent = async (categoria = '', subcategoria = '') => {
     }
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
 
-    // Query separada para buscar os dados (sem o head: true)
+    // Monta a query para buscar os dados com os filtros aplicados
     let baseQuery = supabase
       .from('streamhivex_conteudos')
-      .select('*')
-      .ilike('categoria', `%${categoria}%`)
-      .ilike('subcategoria', `%${subcategoria}%`);
+      .select('*');
+    if (categoria) baseQuery = baseQuery.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) baseQuery = baseQuery.ilike('subcategoria', `%${subcategoria}%`);
 
     const batchSize = 1000;
     let start = 0;
@@ -51,7 +52,7 @@ export const listContent = async (categoria = '', subcategoria = '') => {
       }
       console.log(`📦 Bloco ${tentativa} carregado: ${chunk.length} registros (range ${start}-${end})`);
       allData = allData.concat(chunk);
-      if (chunk.length < batchSize) break; // Fim antecipado
+      if (chunk.length < batchSize) break; // fim antecipado
       start += batchSize;
       tentativa++;
     }
@@ -70,7 +71,7 @@ export const listContent = async (categoria = '', subcategoria = '') => {
       if (!agrupado[categoriaItem][subcategoriaItem]) agrupado[categoriaItem][subcategoriaItem] = [];
 
       if (subcategoriaItem.toLowerCase() === 'serie') {
-        // Agrupa séries com base no nome base
+        // Para séries, agrupa pelo nome base (remove SxxExx no final)
         const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
         const existente = agrupado[categoriaItem][subcategoriaItem].find(s => s.nome === nomeBase);
 
