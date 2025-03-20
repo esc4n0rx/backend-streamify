@@ -8,6 +8,8 @@ const CACHE_DURATION_MS = 1000 * 60 * 30; // 30 minutos
 export const listContent = async (categoria = '', subcategoria = '') => {
   try {
     const now = Date.now();
+    // Aqui o cache é global – para filtros diferentes o cache pode não ser adequado.
+    // Se necessário, implemente chaves de cache separadas por filtros.
     if (contentCache && contentCacheTimestamp && now - contentCacheTimestamp < CACHE_DURATION_MS) {
       console.log('⚡ Retornando dados do cache (conteúdos)');
       return { status: 200, data: contentCache };
@@ -30,6 +32,12 @@ export const listContent = async (categoria = '', subcategoria = '') => {
       return { status: 500, error: 'Erro ao contar registros no banco.' };
     }
     console.log(`📊 Total de registros no banco: ${totalRegistros}`);
+
+    // Se nenhum registro for encontrado, não atualiza o cache e retorna um objeto consistente
+    if (totalRegistros === 0) {
+      console.warn('⚠ Nenhum registro encontrado para os filtros fornecidos. Cache não atualizado.');
+      return { status: 200, data: {} };
+    }
 
     // Monta a query para buscar os dados com os filtros aplicados
     let baseQuery = supabase
@@ -124,6 +132,10 @@ export const listContent = async (categoria = '', subcategoria = '') => {
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
+
+
+
+
 
 export const addContent = async (data) => {
   try {
