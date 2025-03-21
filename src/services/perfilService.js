@@ -42,7 +42,7 @@ export const listarPerfis = async (usuario_id) => {
       const perfilDefault = {
         usuario_id,
         nome: usuario.nome || 'Perfil Padrão',
-        avatar: 'assets/perfil/default.png',
+        avatar: '/assets/perfil/default.png',
         pin: null
       };
 
