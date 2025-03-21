@@ -112,7 +112,11 @@ export const proxyVideo = (req, res) => {
         contentType.includes('application/x-mpegURL') ||
         videoUrl.endsWith('.m3u8') ||
         contentType.includes('application/dash+xml') ||
-        videoUrl.endsWith('.mpd')
+        videoUrl.endsWith('.mp4')
+        if (contentType.includes('video/mp4') && req.headers.range) {
+        console.log('Range request for MP4 detected');
+        
+      }
       ) {
         console.log(`proxyVideo: Conteúdo do manifest identificado (${contentType}). Reescrevendo URLs internas.`);
         let data = '';
