@@ -27,6 +27,11 @@ const handleRequest = (videoUrl, options, redirCount = 0) => {
           console.error('handleRequest: Número máximo de redirecionamentos atingido.');
           return reject(new Error('Número máximo de redirecionamentos atingido.'));
         }
+
+        if (res.headers['content-range']) {
+            console.log(`Content-Range: ${res.headers['content-range']}`);
+          }
+  
         const redirectUrl = new URL(res.headers.location, videoUrl).href;
         console.log(`handleRequest: Redirecionamento para ${redirectUrl}`);
         handleRequest(redirectUrl, options, redirCount + 1)
