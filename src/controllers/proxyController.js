@@ -9,12 +9,23 @@ const handleRequest = (videoUrl, options, redirCount = 0) => {
     const parsed = new URL(videoUrl);
     const client = parsed.protocol === 'http:' ? http : https;
 
-    const req = client.request(videoUrl, options, (res) => {
+    // Atualiza os headers para refletir a URL atual (em caso de redirecionamento)
+    const requestOptions = {
+      ...options,
+      headers: {
+        ...options.headers,
+        Referer: parsed.origin,
+        Origin: parsed.origin,
+      },
+    };
+
+    const req = client.request(videoUrl, requestOptions, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         if (redirCount >= MAX_REDIRECTS) {
           return reject(new Error('Número máximo de redirecionamentos atingido.'));
         }
-        const redirectUrl = res.headers.location;
+        // Resolve redirecionamentos relativos ou absolutos
+        const redirectUrl = new URL(res.headers.location, videoUrl).href;
         handleRequest(redirectUrl, options, redirCount + 1)
           .then(resolve)
           .catch(reject);
@@ -54,24 +65,32 @@ export const proxyVideo = (req, res) => {
     return res.status(400).json({ message: 'Protocolo não permitido.' });
   }
 
+  // Clona os cabeçalhos da requisição original, removendo os que podem causar conflitos
+  const headersToForward = { ...req.headers };
+  delete headersToForward.host;
+  delete headersToForward['content-length'];
+
+  // Sobrescreve alguns headers para padronização e segurança
+  headersToForward['User-Agent'] =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0 Safari/537.36';
+  headersToForward.Referer = parsedUrl.origin;
+  headersToForward.Origin = parsedUrl.origin;
+
   const options = {
     method: req.method,
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0 Safari/537.36',
-      Referer: parsedUrl.origin,
-      Origin: parsedUrl.origin,
-    },
+    headers: headersToForward,
   };
 
   handleRequest(videoUrl, options)
     .then((finalRes) => {
+      // Define os headers CORS
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
       res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 
       const contentType = finalRes.headers['content-type'] || '';
+      // Se for um manifest (m3u8, MPD, etc), reescreve as URLs internas
       if (
         contentType.includes('application/vnd.apple.mpegurl') ||
         contentType.includes('application/x-mpegURL') ||
@@ -85,9 +104,8 @@ export const proxyVideo = (req, res) => {
           data += chunk;
         });
         finalRes.on('end', () => {
-          const baseUrl = getBaseUrl(videoUrl);
           const proxyBaseUrl = `https://${req.get('host')}/api/proxy?url=`;
-
+          // Reescreve as URLs para passar pelo proxy sem alterar parâmetros importantes
           const rewritten = data.replace(/https?:\/\/[^\r\n'"]+/g, (match) => {
             return `${proxyBaseUrl}${encodeURIComponent(match)}`;
           });
