@@ -6,6 +6,7 @@ const MAX_REDIRECTS = 5;
 
 const handleRequest = (videoUrl, options, redirCount = 0) => {
   return new Promise((resolve, reject) => {
+    console.log(`handleRequest: Iniciando requisição para ${videoUrl} (redirecionamento: ${redirCount})`);
     const parsed = new URL(videoUrl);
     const client = parsed.protocol === 'http:' ? http : https;
 
@@ -20,12 +21,14 @@ const handleRequest = (videoUrl, options, redirCount = 0) => {
     };
 
     const req = client.request(videoUrl, requestOptions, (res) => {
+      console.log(`handleRequest: Resposta recebida para ${videoUrl} com status ${res.statusCode}`);
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         if (redirCount >= MAX_REDIRECTS) {
+          console.error('handleRequest: Número máximo de redirecionamentos atingido.');
           return reject(new Error('Número máximo de redirecionamentos atingido.'));
         }
-        // Resolve redirecionamentos relativos ou absolutos
         const redirectUrl = new URL(res.headers.location, videoUrl).href;
+        console.log(`handleRequest: Redirecionamento para ${redirectUrl}`);
         handleRequest(redirectUrl, options, redirCount + 1)
           .then(resolve)
           .catch(reject);
@@ -34,7 +37,10 @@ const handleRequest = (videoUrl, options, redirCount = 0) => {
       }
     });
 
-    req.on('error', (err) => reject(err));
+    req.on('error', (err) => {
+      console.error(`handleRequest: Erro na requisição para ${videoUrl}: ${err.message}`);
+      reject(err);
+    });
     req.end();
   });
 };
@@ -48,9 +54,11 @@ function getBaseUrl(urlString) {
 }
 
 export const proxyVideo = (req, res) => {
+  console.log(`proxyVideo: Requisição recebida com query ${JSON.stringify(req.query)}`);
   const videoUrl = req.query.url;
 
   if (!videoUrl) {
+    console.error("proxyVideo: Parâmetro 'url' não informado.");
     return res.status(400).json({ message: "Parâmetro 'url' é obrigatório." });
   }
 
@@ -58,10 +66,12 @@ export const proxyVideo = (req, res) => {
   try {
     parsedUrl = new URL(videoUrl);
   } catch (err) {
+    console.error(`proxyVideo: URL inválida: ${videoUrl}`);
     return res.status(400).json({ message: 'URL inválida.' });
   }
 
   if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    console.error(`proxyVideo: Protocolo não permitido: ${parsedUrl.protocol}`);
     return res.status(400).json({ message: 'Protocolo não permitido.' });
   }
 
@@ -81,8 +91,10 @@ export const proxyVideo = (req, res) => {
     headers: headersToForward,
   };
 
+  console.log(`proxyVideo: Iniciando requisição proxy para ${videoUrl}`);
   handleRequest(videoUrl, options)
     .then((finalRes) => {
+      console.log(`proxyVideo: Resposta final recebida com status ${finalRes.statusCode}`);
       // Define os headers CORS
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -90,7 +102,6 @@ export const proxyVideo = (req, res) => {
       res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 
       const contentType = finalRes.headers['content-type'] || '';
-      // Se for um manifest (m3u8, MPD, etc), reescreve as URLs internas
       if (
         contentType.includes('application/vnd.apple.mpegurl') ||
         contentType.includes('application/x-mpegURL') ||
@@ -98,6 +109,7 @@ export const proxyVideo = (req, res) => {
         contentType.includes('application/dash+xml') ||
         videoUrl.endsWith('.mpd')
       ) {
+        console.log(`proxyVideo: Conteúdo do manifest identificado (${contentType}). Reescrevendo URLs internas.`);
         let data = '';
         finalRes.setEncoding('utf8');
         finalRes.on('data', (chunk) => {
@@ -105,22 +117,26 @@ export const proxyVideo = (req, res) => {
         });
         finalRes.on('end', () => {
           const proxyBaseUrl = `https://${req.get('host')}/api/proxy?url=`;
-          // Reescreve as URLs para passar pelo proxy sem alterar parâmetros importantes
           const rewritten = data.replace(/https?:\/\/[^\r\n'"]+/g, (match) => {
-            return `${proxyBaseUrl}${encodeURIComponent(match)}`;
+            const proxiedUrl = `${proxyBaseUrl}${encodeURIComponent(match)}`;
+            console.log(`proxyVideo: Reescrevendo URL: ${match} para ${proxiedUrl}`);
+            return proxiedUrl;
           });
 
           const headers = { ...finalRes.headers };
           delete headers['content-length'];
           res.writeHead(finalRes.statusCode, headers);
           res.end(rewritten);
+          console.log('proxyVideo: Resposta do manifest enviada com sucesso.');
         });
       } else {
+        console.log(`proxyVideo: Conteúdo não é manifest. Encaminhando resposta diretamente.`);
         res.writeHead(finalRes.statusCode, finalRes.headers);
         finalRes.pipe(res);
       }
     })
     .catch((err) => {
+      console.error(`proxyVideo: Erro ao buscar o recurso ${videoUrl}: ${err.message}`);
       res.status(500).json({ message: 'Erro ao buscar o recurso.', error: err.message, url: videoUrl });
     });
 };
