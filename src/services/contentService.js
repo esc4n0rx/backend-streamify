@@ -26,15 +26,16 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
     console.log('🔍 ' + (isPaginated ? 'Carregando página de conteúdos' : 'Carregando conteúdos do banco...'));
     console.log(`Filtros: ${categoria ? 'categoria='+categoria : ''} ${subcategoria ? 'subcategoria='+subcategoria : ''}`);
     
-    // Monta a query base com filtros condicionais
-    let baseQuery = supabase.from('streamhivex_conteudos').select('*');
+    // Monta a query para contagem com filtros condicionais
+    let countQuery = supabase
+      .from('streamhivex_conteudos')
+      .select('*', { count: 'exact', head: true });
     
-    // Aplicação de filtros - verifica se parâmetros têm conteúdo antes de aplicar
-    if (categoria) baseQuery = baseQuery.ilike('categoria', `%${categoria}%`);
-    if (subcategoria) baseQuery = baseQuery.ilike('subcategoria', `%${subcategoria}%`);
+    // Aplicação de filtros para contagem
+    if (categoria) countQuery = countQuery.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) countQuery = countQuery.ilike('subcategoria', `%${subcategoria}%`);
     
-    // Contagem total com os mesmos filtros
-    const { count: totalRegistros, error: countError } = await baseQuery.count();
+    const { count: totalRegistros, error: countError } = await countQuery;
     
     if (countError) {
       console.error('❌ Erro ao contar registros:', countError.message);
@@ -53,6 +54,11 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
         filters: { categoria, subcategoria }
       };
     }
+    
+    // Monta a query base para busca de dados com os mesmos filtros
+    let baseQuery = supabase.from('streamhivex_conteudos').select('*');
+    if (categoria) baseQuery = baseQuery.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) baseQuery = baseQuery.ilike('subcategoria', `%${subcategoria}%`);
     
     let allData = [];
     
@@ -74,7 +80,8 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
       const totalPages = Math.ceil(totalRegistros / limitNum);
       
       // Agrupamos os dados e adicionamos informações de paginação
-      const agrupado = agruparDados(allData, !!subcategoria);
+      const apenasSubcategoria = !categoria && subcategoria;
+      const agrupado = agruparDados(allData, apenasSubcategoria);
       
       console.log(`✅ Conteúdos da página ${pageNum} organizados e prontos para envio.`);
       
@@ -168,12 +175,14 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
 function agruparDados(allData, filtroEspecial = false) {
   // Se estamos filtrando apenas por subcategoria, usamos uma organização mais plana
   if (filtroEspecial) {
-    let resultado = {};
+    // Verifica se todos os itens têm a mesma subcategoria
+    const subcategorias = new Set(allData.map(item => 
+      item.subcategoria ? item.subcategoria.toLowerCase() : 'outro'
+    ));
     
-    // Agrupamento especial para Serie quando solicitado explicitamente
-    const isSerie = allData.length > 0 && 
-                    allData[0].subcategoria && 
-                    allData[0].subcategoria.toLowerCase() === 'serie';
+    // Se a subcategoria for "serie", aplicamos agrupamento especial
+    const isSerie = subcategorias.size === 1 && 
+                    subcategorias.has('serie');
     
     if (isSerie) {
       // Mapa para organizar séries pelo nome base
@@ -203,15 +212,15 @@ function agruparDados(allData, filtroEspecial = false) {
       }
       
       // Converte o mapa para o formato de resposta
-      resultado = Array.from(seriesMap.values());
+      const resultado = Array.from(seriesMap.values());
       
       // Organiza episódios por temporada e número
       for (const serie of resultado) {
         serie.episodios.sort((a, b) => {
           if (a.temporada !== b.temporada) {
-            return parseInt(a.temporada) - parseInt(b.temporada);
+            return parseInt(a.temporada || '0') - parseInt(b.temporada || '0');
           }
-          return parseInt(a.episodio) - parseInt(b.episodio);
+          return parseInt(a.episodio || '0') - parseInt(b.episodio || '0');
         });
       }
       
@@ -260,9 +269,9 @@ function agruparDados(allData, filtroEspecial = false) {
         // Organiza episódios por temporada e número
         existente.episodios.sort((a, b) => {
           if (a.temporada !== b.temporada) {
-            return parseInt(a.temporada) - parseInt(b.temporada);
+            return parseInt(a.temporada || '0') - parseInt(b.temporada || '0');
           }
-          return parseInt(a.episodio) - parseInt(b.episodio);
+          return parseInt(a.episodio || '0') - parseInt(b.episodio || '0');
         });
       } else {
         agrupado[categoriaItem][subcategoriaItem].push({
