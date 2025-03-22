@@ -27,6 +27,44 @@ export const listAvatars = () => {
   };
 
 
+  export const loginSocial = async ({ nome, email }) => {
+    try {
+      // Verifica se já existe usuário com esse email
+      const { data: user, error: userError } = await supabase
+        .from('streamify_profile')
+        .select('*')
+        .eq('email', email)
+        .single();
+  
+      let userData = user;
+  
+      // Se não existir, criar novo
+      if (!userData) {
+        const { data: newUser, error: createError } = await supabase
+          .from('streamify_profile')
+          .insert([{ nome, email }])
+          .select()
+          .single();
+  
+        if (createError) return { status: 400, error: createError.message };
+        userData = newUser;
+      }
+  
+      // Gera token JWT
+      const token = jwt.sign(
+        { id: userData.id, email: userData.email },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+  
+      return { status: 200, message: 'Login social bem-sucedido', user: userData, token };
+    } catch (err) {
+      return { status: 500, error: 'Erro interno no login social' };
+    }
+  };
+  
+
+
   
   export const register = async ({ nome, email, senha }) => {
     try {

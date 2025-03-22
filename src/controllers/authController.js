@@ -24,4 +24,13 @@ export const getAvatars = async (req, res) => {
     res.status(response.status).json(response);
   };
 
+  export const loginSocial = async (req, res) => {
+    const { nome, email } = req.body;
+    if (!email || !nome) return res.status(400).json({ error: 'Nome e email são obrigatórios.' });
+  
+    const response = await authService.loginSocial({ nome, email });
+    res.status(response.status).json(response);
+  };
+  
+
   
