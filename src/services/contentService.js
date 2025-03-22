@@ -13,45 +13,46 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
     const limitNum = parseInt(limit) || 20;
     const offset = (pageNum - 1) * limitNum;
     
-    // Se não estiver usando paginação, usa a lógica de cache original
-    if (!isPaginated && contentCache && contentCacheTimestamp && now - contentCacheTimestamp < CACHE_DURATION_MS) {
+    // Para promover consistência, mantemos o cache apenas quando não há nenhum filtro
+    const usarCache = !isPaginated && !categoria && !subcategoria && 
+                     contentCache && contentCacheTimestamp && 
+                     now - contentCacheTimestamp < CACHE_DURATION_MS;
+    
+    if (usarCache) {
       console.log('⚡ Retornando dados do cache (conteúdos)');
       return { status: 200, data: contentCache };
     }
     
-    console.log('🔍 ' + (isPaginated ? 'Carregando página de conteúdos' : 'Cache expirado. Carregando conteúdos do banco...'));
+    console.log('🔍 ' + (isPaginated ? 'Carregando página de conteúdos' : 'Carregando conteúdos do banco...'));
+    console.log(`Filtros: ${categoria ? 'categoria='+categoria : ''} ${subcategoria ? 'subcategoria='+subcategoria : ''}`);
     
-    // Monta a query para contagem com filtros condicionais
-    let countQuery = supabase
-      .from('streamhivex_conteudos')
-      .select('*', { count: 'exact', head: true });
-    if (categoria) countQuery = countQuery.ilike('categoria', `%${categoria}%`);
-    if (subcategoria) countQuery = countQuery.ilike('subcategoria', `%${subcategoria}%`);
+    // Monta a query base com filtros condicionais
+    let baseQuery = supabase.from('streamhivex_conteudos').select('*');
     
-    const { count: totalRegistros, error: countError } = await countQuery;
+    // Aplicação de filtros - verifica se parâmetros têm conteúdo antes de aplicar
+    if (categoria) baseQuery = baseQuery.ilike('categoria', `%${categoria}%`);
+    if (subcategoria) baseQuery = baseQuery.ilike('subcategoria', `%${subcategoria}%`);
     
-    if (countError || totalRegistros === null) {
-      console.error(
-        '❌ Erro ao contar registros ou total é nulo:',
-        countError ? countError.message : 'Total de registros é nulo'
-      );
+    // Contagem total com os mesmos filtros
+    const { count: totalRegistros, error: countError } = await baseQuery.count();
+    
+    if (countError) {
+      console.error('❌ Erro ao contar registros:', countError.message);
       return { status: 500, error: 'Erro ao contar registros no banco.' };
     }
     
-    console.log(`📊 Total de registros no banco: ${totalRegistros}`);
+    console.log(`📊 Total de registros no banco com filtros aplicados: ${totalRegistros}`);
     
-    // Se nenhum registro for encontrado, não atualiza o cache e retorna um objeto consistente
+    // Se nenhum registro for encontrado, retorna um objeto consistente
     if (totalRegistros === 0) {
-      console.warn('⚠ Nenhum registro encontrado para os filtros fornecidos. Cache não atualizado.');
-      return { status: 200, data: {}, pagination: isPaginated ? { total: 0, page: pageNum, limit: limitNum, pages: 0 } : undefined };
+      console.warn('⚠ Nenhum registro encontrado para os filtros fornecidos.');
+      return { 
+        status: 200, 
+        data: {}, 
+        pagination: isPaginated ? { total: 0, page: pageNum, limit: limitNum, pages: 0 } : undefined,
+        filters: { categoria, subcategoria }
+      };
     }
-    
-    // Monta a query para buscar os dados com os filtros aplicados
-    let baseQuery = supabase
-      .from('streamhivex_conteudos')
-      .select('*');
-    if (categoria) baseQuery = baseQuery.ilike('categoria', `%${categoria}%`);
-    if (subcategoria) baseQuery = baseQuery.ilike('subcategoria', `%${subcategoria}%`);
     
     let allData = [];
     
@@ -66,14 +67,14 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
         return { status: 400, error: error.message };
       }
       
-      console.log(`📦 Página ${pageNum} carregada: ${paginatedData.length} registros (limit ${limitNum}, offset ${offset})`);
+      console.log(`📦 Página ${pageNum} carregada: ${paginatedData.length} registros`);
       allData = paginatedData;
       
       // Calcula o número total de páginas
       const totalPages = Math.ceil(totalRegistros / limitNum);
       
-      // Para paginação, agrupamos os dados normalmente e adicionamos informações de paginação
-      const agrupado = agruparDados(allData);
+      // Agrupamos os dados e adicionamos informações de paginação
+      const agrupado = agruparDados(allData, !!subcategoria);
       
       console.log(`✅ Conteúdos da página ${pageNum} organizados e prontos para envio.`);
       
@@ -85,66 +86,152 @@ export const listContent = async (categoria = '', subcategoria = '', page = null
           page: pageNum,
           limit: limitNum,
           pages: totalPages
-        }
+        },
+        filters: { categoria, subcategoria }
       };
     } else {
-      // Lógica original para carregar todos os dados
+      // Lógica para carregar todos os dados
       const batchSize = 1000;
       let start = 0;
       let tentativa = 1;
       
-      while (start < totalRegistros) {
-        const end = Math.min(start + batchSize - 1, totalRegistros - 1);
-        const { data: chunk, error } = await baseQuery.range(start, end);
+      // Otimização: se o total for pequeno, carregamos tudo de uma vez
+      if (totalRegistros <= batchSize) {
+        const { data, error } = await baseQuery.order('id', { ascending: true });
         
         if (error) {
-          console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
+          console.error('❌ Erro ao carregar dados:', error.message);
           return { status: 400, error: error.message };
         }
         
-        console.log(`📦 Bloco ${tentativa} carregado: ${chunk.length} registros (range ${start}-${end})`);
-        allData = allData.concat(chunk);
-        
-        if (chunk.length < batchSize) break; // fim antecipado
-        start += batchSize;
-        tentativa++;
-      }
-      
-      console.log(`✅ Total retornado após batches: ${allData.length}`);
-      
-      if (allData.length !== totalRegistros) {
-        console.warn(`⚠ Diferença no total: esperado ${totalRegistros}, recebido ${allData.length}`);
-      }
-      
-      // Agrupamento dos dados
-      const agrupado = agruparDados(allData);
-      
-      // Atualiza o cache em memória e salva em arquivo
-      contentCache = agrupado;
-      contentCacheTimestamp = Date.now();
-      
-      try {
-        const cacheDir = './cache';
-        if (!fs.existsSync(cacheDir)) {
-          fs.mkdirSync(cacheDir, { recursive: true });
+        allData = data;
+        console.log(`📦 Dados carregados em uma única chamada: ${allData.length} registros`);
+      } else {
+        // Carregamento em lotes para grandes volumes
+        while (start < totalRegistros) {
+          const end = Math.min(start + batchSize - 1, totalRegistros - 1);
+          const { data: chunk, error } = await baseQuery
+            .range(start, end)
+            .order('id', { ascending: true });
+          
+          if (error) {
+            console.error(`❌ Erro ao carregar bloco ${tentativa}:`, error.message);
+            return { status: 400, error: error.message };
+          }
+          
+          console.log(`📦 Bloco ${tentativa} carregado: ${chunk.length} registros (range ${start}-${end})`);
+          allData = allData.concat(chunk);
+          
+          if (chunk.length < batchSize) break; // fim antecipado
+          start += batchSize;
+          tentativa++;
         }
-        fs.writeFileSync(`${cacheDir}/content.json`, JSON.stringify(agrupado, null, 2));
-        console.log('💾 Cache salvo também em ./cache/content.json');
-      } catch (err) {
-        console.warn('⚠ Não foi possível salvar cache local em arquivo:', err.message);
       }
       
-      console.log('✅ Conteúdos organizados, cache atualizado e prontos para envio.');
-      return { status: 200, data: agrupado };
+      console.log(`✅ Total carregado: ${allData.length} registros`);
+      
+      // Agrupamento dos dados - passamos flag para comportamento especial quando filtramos só por subcategoria
+      const apenasSubcategoria = !categoria && subcategoria;
+      const agrupado = agruparDados(allData, apenasSubcategoria);
+      
+      // Atualiza o cache apenas se não houver filtros
+      if (!categoria && !subcategoria) {
+        contentCache = agrupado;
+        contentCacheTimestamp = Date.now();
+        
+        try {
+          const cacheDir = './cache';
+          if (!fs.existsSync(cacheDir)) {
+            fs.mkdirSync(cacheDir, { recursive: true });
+          }
+          fs.writeFileSync(`${cacheDir}/content.json`, JSON.stringify(agrupado, null, 2));
+          console.log('💾 Cache salvo também em ./cache/content.json');
+        } catch (err) {
+          console.warn('⚠ Não foi possível salvar cache local em arquivo:', err.message);
+        }
+      }
+      
+      console.log('✅ Conteúdos organizados e prontos para envio.');
+      return { 
+        status: 200, 
+        data: agrupado,
+        filters: { categoria, subcategoria }
+      };
     }
   } catch (err) {
-    console.error('❌ Erro interno ao listar conteúdos:', err.message);
+    console.error('❌ Erro interno ao listar conteúdos:', err.message, err.stack);
     return { status: 500, error: 'Erro ao listar conteúdos' };
   }
 };
 
 // Função auxiliar para agrupar os dados
-function agruparDados(allData) {
+function agruparDados(allData, filtroEspecial = false) {
+  // Se estamos filtrando apenas por subcategoria, usamos uma organização mais plana
+  if (filtroEspecial) {
+    let resultado = {};
+    
+    // Agrupamento especial para Serie quando solicitado explicitamente
+    const isSerie = allData.length > 0 && 
+                    allData[0].subcategoria && 
+                    allData[0].subcategoria.toLowerCase() === 'serie';
+    
+    if (isSerie) {
+      // Mapa para organizar séries pelo nome base
+      const seriesMap = new Map();
+      
+      for (const item of allData) {
+        // Remove SxxExx no final do nome para agrupar
+        const nomeBase = item.nome.replace(/S\d{2}E\d{2}$/i, '').trim();
+        
+        if (!seriesMap.has(nomeBase)) {
+          seriesMap.set(nomeBase, {
+            nome: nomeBase,
+            poster: item.poster,
+            url: item.url,
+            sinopse: item.sinopse || 'Descrição não fornecida',
+            episodios: []
+          });
+        }
+        
+        seriesMap.get(nomeBase).episodios.push({
+          id: item.id,
+          episodio: item.episodios,
+          temporada: item.temporadas,
+          url: item.url,
+          nome: item.nome
+        });
+      }
+      
+      // Converte o mapa para o formato de resposta
+      resultado = Array.from(seriesMap.values());
+      
+      // Organiza episódios por temporada e número
+      for (const serie of resultado) {
+        serie.episodios.sort((a, b) => {
+          if (a.temporada !== b.temporada) {
+            return parseInt(a.temporada) - parseInt(b.temporada);
+          }
+          return parseInt(a.episodio) - parseInt(b.episodio);
+        });
+      }
+      
+      // Organiza séries por ordem alfabética
+      resultado.sort((a, b) => a.nome.localeCompare(b.nome));
+      
+      return resultado;
+    } else {
+      // Para outros tipos de subcategoria, apenas retorna a lista plana
+      return allData.map(item => ({
+        id: item.id,
+        nome: item.nome,
+        poster: item.poster,
+        url: item.url,
+        sinopse: item.sinopse || 'Descrição não fornecida'
+      }));
+    }
+  }
+  
+  // Comportamento padrão: agrupamento por categoria/subcategoria
   const agrupado = {};
   
   for (const item of allData) {
@@ -163,11 +250,20 @@ function agruparDados(allData) {
         id: item.id,
         episodio: item.episodios,
         temporada: item.temporadas,
-        url: item.url
+        url: item.url,
+        nome: item.nome
       };
       
       if (existente) {
         existente.episodios.push(episodio);
+        
+        // Organiza episódios por temporada e número
+        existente.episodios.sort((a, b) => {
+          if (a.temporada !== b.temporada) {
+            return parseInt(a.temporada) - parseInt(b.temporada);
+          }
+          return parseInt(a.episodio) - parseInt(b.episodio);
+        });
       } else {
         agrupado[categoriaItem][subcategoriaItem].push({
           nome: nomeBase,
@@ -195,6 +291,11 @@ export const addContent = async (data) => {
   try {
     const { error } = await supabase.from('streamhivex_conteudos').insert([data]);
     if (error) return { status: 400, error: error.message };
+    
+    // Invalidar o cache após modificação
+    contentCache = null;
+    contentCacheTimestamp = null;
+    
     return { status: 201, message: 'Conteúdo adicionado com sucesso' };
   } catch (err) {
     return { status: 500, error: 'Erro ao adicionar conteúdo' };
@@ -208,6 +309,11 @@ export const updateContent = async (id, updates) => {
       .update(updates)
       .eq('id', id);
     if (error) return { status: 400, error: error.message };
+    
+    // Invalidar o cache após modificação
+    contentCache = null;
+    contentCacheTimestamp = null;
+    
     return { status: 200, message: 'Conteúdo atualizado com sucesso' };
   } catch (err) {
     return { status: 500, error: 'Erro ao atualizar conteúdo' };
@@ -221,6 +327,11 @@ export const deleteContent = async (id) => {
       .delete()
       .eq('id', id);
     if (error) return { status: 400, error: error.message };
+    
+    // Invalidar o cache após modificação
+    contentCache = null;
+    contentCacheTimestamp = null;
+    
     return { status: 200, message: 'Conteúdo removido com sucesso' };
   } catch (err) {
     return { status: 500, error: 'Erro ao remover conteúdo' };
