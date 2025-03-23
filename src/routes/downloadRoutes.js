@@ -1,5 +1,5 @@
 import express from 'express';
-import { proxyDownload } from '../controllers/downloadController.js';
+import { proxyDownload, listUserDownloads } from '../controllers/downloadController.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
