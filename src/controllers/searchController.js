@@ -2,19 +2,35 @@ import { supabase } from '../config/supabase.js';
 
 export const searchContents = async (req, res) => {
   const termo = req.query.termo;
+
   if (!termo) {
     return res.status(400).json({ error: 'Termo de busca é obrigatório.' });
   }
 
   try {
-    const { data: results, error } = await supabase
-      .from('streamhivex_conteudos')
-      .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
-      .or(`nome.ilike.%${termo}%,categoria.ilike.%${termo}%,subcategoria.ilike.%${termo}%`)
-      .limit(50);
+    let results = [];
+    const isNumeric = /^\d+$/.test(termo); // Verifica se é número inteiro
 
-    if (error) {
-      throw error;
+    if (isNumeric) {
+      // Busca por ID
+      const { data, error } = await supabase
+        .from('streamhivex_conteudos')
+        .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
+        .eq('id', Number(termo));
+
+      if (error) throw error;
+      results = data || [];
+
+    } else {
+      // Busca textual
+      const { data, error } = await supabase
+        .from('streamhivex_conteudos')
+        .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
+        .or(`nome.ilike.%${termo}%,categoria.ilike.%${termo}%,subcategoria.ilike.%${termo}%`)
+        .limit(50);
+
+      if (error) throw error;
+      results = data || [];
     }
 
     let filmes = [];
