@@ -12,6 +12,7 @@ import continueWatchingRoutes from './routes/continueWatchingRoutes.js';
 import downloadRoutes from './routes/downloadRoutes.js';
 import watchRoutes from './routes/watchRoutes.js';
 import listRoutes from './routes/listRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -40,6 +41,7 @@ app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/watch', watchRoutes);
 app.use('/api', sinopseRoutes);
 app.use('/api/perfis', perfilRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/lists', listRoutes);
 app.use('/api/continue-watching', continueWatchingRoutes);
 app.use('/api/download', downloadRoutes);
