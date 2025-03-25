@@ -13,6 +13,7 @@ import downloadRoutes from './routes/downloadRoutes.js';
 import watchRoutes from './routes/watchRoutes.js';
 import listRoutes from './routes/listRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
+import rankingRoutes from './routes/rankingRoutes.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -45,6 +46,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/lists', listRoutes);
 app.use('/api/continue-watching', continueWatchingRoutes);
 app.use('/api/download', downloadRoutes);
+app.use('/api/ranking', rankingRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
